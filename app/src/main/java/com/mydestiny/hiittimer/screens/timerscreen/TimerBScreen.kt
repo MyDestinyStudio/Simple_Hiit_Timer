@@ -306,8 +306,8 @@ fun TimerScreenUI(
                     end.linkTo(parent.end)
                     height = Dimension.wrapContent
                     width = Dimension.wrapContent
-                }
-                .border(2.dp, color = Color.Green), contentAlignment = Alignment.Center) {
+                },
+                contentAlignment = Alignment.Center) {
                 TimeText(
                     timeLeft = timerState.currentTime, textSize = 37
                 )
