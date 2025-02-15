@@ -13,7 +13,6 @@ package com.mydestiny.hiittimer.screens.timerscreen
  import androidx.compose.animation.slideInVertically
  import androidx.compose.animation.slideOutVertically
  import androidx.compose.animation.togetherWith
- import androidx.compose.foundation.border
  import androidx.compose.foundation.layout.Box
  import androidx.compose.foundation.layout.BoxWithConstraints
  import androidx.compose.foundation.layout.Row
@@ -81,6 +80,9 @@ fun TimerScreenUI(
 
     val timerState by timerViewModel.timerState.collectAsState() //Collect timer state
 
+    val isTimerRunning by timerViewModel.isTimerRunning .collectAsState()
+    val index by timerViewModel.index.collectAsState()
+
 
 
     val list by timerViewModel.workoutDetail.collectAsState()
@@ -93,7 +95,6 @@ fun TimerScreenUI(
     val configuration = LocalConfiguration.current
     val context = LocalContext.current as Activity
     val sWidth by remember { mutableIntStateOf(30) }
-    var  hasRun  by rememberSaveable { mutableStateOf(false) }
     var isLocked by rememberSaveable { mutableStateOf(false) }
     var exitAlert by rememberSaveable { mutableStateOf(false) }
 
@@ -112,7 +113,7 @@ fun TimerScreenUI(
     LaunchedEffect(key1 =Unit) {
 
       //if (!hasRun )  {
-           timerViewModel. updateTimerState(isTimerRunning = true)
+
             timerViewModel.startTimer()
 
           //  hasRun =true
@@ -121,9 +122,9 @@ fun TimerScreenUI(
     }
 
 
-    LaunchedEffect(timerState.isTimerRunning) {
+    LaunchedEffect( isTimerRunning) {
 
-        if (timerState.isTimerRunning) {
+        if (  isTimerRunning) {
             context.window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
 
 
@@ -148,6 +149,7 @@ fun TimerScreenUI(
             onDismissRequest = {
                 timerViewModel.resetTimer()
                 navController.navigate(  StartObScreen, navOptions { popUpTo(TimerObScreen){inclusive=true} }  )
+
             },
             title = { Text("Alert Dialog") },
             text = { Text("Timer Is Finished  ") },
@@ -156,6 +158,8 @@ fun TimerScreenUI(
                     timerViewModel.resetTimer()
                     navController.navigate(  StartObScreen,
                         navOptions { popUpTo(TimerObScreen){inclusive=true} }  )
+
+                    timerViewModel.resetTimer()
                 }) {
                     Text("OK")
                 }
@@ -223,7 +227,7 @@ fun TimerScreenUI(
 
                     }
                     .height(70.dp),
-                count = timerState.index + 1,
+                count =  index + 1,
                 size = list.size,
                 fontSize = 38,
                 isPlus = timerState.isGoingForward
@@ -240,15 +244,15 @@ fun TimerScreenUI(
 
                     },
                 onClick = {
-                    if (timerState.isTimerRunning) timerViewModel.pauseTimer() else if (!timerState.isTimerRunning) timerViewModel.startTimer()
+                    if ( isTimerRunning) timerViewModel.pauseTimer() else if (! isTimerRunning) timerViewModel.startTimer()
                 },
                 enabled = !isLocked
             ) {
                 Icon(
                     modifier = Modifier.fillMaxSize(),
-                    imageVector = if (timerState.isTimerRunning) {
+                    imageVector = if ( isTimerRunning) {
                         Icons.Filled.Pause
-                    } else if (!timerState.isTimerRunning) {
+                    } else if (! isTimerRunning) {
                         Icons.Filled.PlayArrow
                     } else {
                         Icons.Filled.Pause
@@ -287,13 +291,22 @@ fun TimerScreenUI(
                 height = Dimension.wrapContent
                 width = Dimension.wrapContent
             },
-                targetState = timerState.index,
+                targetState =  index,
                 transitionSpec = {
                     slideInVertically { if (timerState.isGoingForward) it else if (!timerState.isGoingForward) -it else it
                     } togetherWith slideOutVertically { if (timerState.isGoingForward) -it else if (!timerState.isGoingForward) it else -it } },
                 label = "") {
 
-                          Text(text =list[it].intervalName, fontSize = 37.sp )
+                    targetIndex ->
+                val intervalInfo = list.getOrNull(targetIndex)
+
+                if (intervalInfo != null) {
+                    // If the index is valid, display the interval name
+                    Text(text = intervalInfo.intervalName, fontSize = 37.sp)
+                } else {
+
+                    Log.e("AnimatedContent", "Index out of bounds: $targetIndex, list size: ${list.size}")
+                }
 
                            }
 
@@ -352,7 +365,7 @@ fun TimerScreenUI(
                     IconButton(
                         modifier = Modifier.size(70.dp),
                         onClick = { timerViewModel.previousInterval() },
-                        enabled = timerState.index != 0 && !isLocked
+                        enabled =  index != 0 && !isLocked
                     ) {
                         Icon(
                             modifier = Modifier.fillMaxSize(),
@@ -363,7 +376,7 @@ fun TimerScreenUI(
 
                     Box(modifier = Modifier.weight(1f)) {
                         ExercisesIndicator(
-                            index = timerState.index,
+                            index =  index,
                             listOfExercise = list,
                             isPlus = timerState.isGoingForward
                         )
@@ -375,7 +388,7 @@ fun TimerScreenUI(
                         onClick = {
                             timerViewModel.nextInterval()
                         },
-                        enabled = timerState.index != list.lastIndex && !isLocked,
+                        enabled =  index != list.lastIndex && !isLocked,
 
                         ) {
                         Icon(

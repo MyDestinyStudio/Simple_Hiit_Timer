@@ -1,5 +1,6 @@
 package com.mydestiny.hiittimer.screens.timerscreen
 
+import android.annotation.SuppressLint
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.SoundPool
@@ -21,21 +22,20 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 
-  
-  
-  
-  
+
+
+
+
   data class TimerStateData(
-      val index: Int = 0,
       val currentTime: Long = 0L,
-      val isTimerRunning: Boolean = false,
       val showAlert: Boolean = false,
       val outerProgress: Float = 0f,
       val innerProgress: Float = 0f,
       val isGoingForward: Boolean = true
   )
 
-  class TimerViewModel(private val context: Context) : ViewModel() {
+  @Suppress("DEPRECATION")
+  class TimerViewModel(@SuppressLint("StaticFieldLeak") private val context: Context) : ViewModel() {
 
       private val soundPool = SoundPool.Builder()
           .setMaxStreams(1)
@@ -49,16 +49,24 @@ import kotlinx.coroutines.launch
 
       private var soundId: Int? = null
 
-      private val _workoutDetail = MutableStateFlow (listOf(IntervalsInfo())) // Start with one interval
+      private val _workoutDetail = MutableStateFlow (listOf(IntervalsInfo()))
       val workoutDetail: StateFlow<List<IntervalsInfo>> = _workoutDetail.asStateFlow()
 
       private var timeTotalList: Long = 0L
 
-
       private val _timerState = MutableStateFlow(TimerStateData())
       val timerState: StateFlow<TimerStateData> = _timerState.asStateFlow()
 
-      private var exercisesTotalTime: Long = 0L
+
+      private val _isTimerRunning  = MutableStateFlow(false )
+      val isTimerRunning : StateFlow<Boolean>  = _isTimerRunning .asStateFlow()
+
+      private val _index  = MutableStateFlow(0)
+      val index : StateFlow<Int>  = _index  .asStateFlow()
+
+      private val  _pausedTime = MutableStateFlow(0L)
+
+     private var exercisesTotalTime: Long = 0L
       private var startTime: Long = 0L
       private val tic = 20L
       private var vibration = true
@@ -67,7 +75,7 @@ import kotlinx.coroutines.launch
 
       init {
           Log.d("TBViewMode", "VM Created ")
-          loadSound()  // Load sound in init
+          loadSound()
       }
 
       private fun loadSound() {
@@ -101,28 +109,44 @@ import kotlinx.coroutines.launch
 
           if (job?.isActive == true) return@launch
 
-          updateTimerState(isTimerRunning = true) // Use
+          // Check if timer was previously paused
+          val wasPaused = !isTimerRunning.value && _timerState.value.currentTime > 0
 
-          startTime = System.currentTimeMillis()
+          _isTimerRunning.value = true
 
-          timeTotalList = _workoutDetail.value.sumOf { it.intervalDuration }
 
-          job = viewModelScope.launch(Dispatchers.IO) { // Keep timer logic on IO
+          if (wasPaused) {
+              // Resume from paused time
+               startTime = System.currentTimeMillis() - _pausedTime.value
+              _pausedTime.value = 0L
+          } else {
+              // Start a fresh timer
+              startTime = System.currentTimeMillis()
 
+
+          }
+
+
+          job = viewModelScope.launch(Dispatchers.IO) {
               try {
-                  while (isActive && _timerState.value.isTimerRunning) {
+                  while (isActive  ) {
+
+
+                      timeTotalList  = _workoutDetail.value.sumOf { it.intervalDuration }
+
 
                       val elapsedTime = System.currentTimeMillis() - startTime
 
-                      val currentIndex = _timerState.value.index
-                      val currentIntervalDuration = _workoutDetail.value[currentIndex].intervalDuration
-                      val remainingTime = currentIntervalDuration - elapsedTime
 
 
-                      exercisesTotalTime = _workoutDetail.value.subList(currentIndex, _workoutDetail.value.size)
-                          .sumOf { it.intervalDuration } - elapsedTime
+                      val remainingTime = _workoutDetail.value[_index.value].intervalDuration - elapsedTime
 
-                      val outerProgress = remainingTime.toFloat() / currentIntervalDuration.toFloat()
+//                      if (remainingTime < 0) remainingTime = 0 // prevent negative remain time
+
+
+                      exercisesTotalTime = _workoutDetail.value.subList(_index.value, _workoutDetail.value.size) .sumOf { it.intervalDuration } - elapsedTime
+
+                      val outerProgress = remainingTime.toFloat() / _workoutDetail.value[_index.value].intervalDuration.toFloat()
                       val innerProgress = exercisesTotalTime.toFloat() / timeTotalList.toFloat()
 
 
@@ -146,22 +170,22 @@ import kotlinx.coroutines.launch
                               vibrate()
                           }
 
-                          val nextIndex = currentIndex + 1
 
-                          if (nextIndex < _workoutDetail.value.size) {
+
+                          if (_index.value < _workoutDetail.value.size) {
+
+                              _index.value += 1
 
                               updateTimerState(
-                                  index = nextIndex
+
+                                  currentTime = _workoutDetail.value[_index.value+1].intervalDuration //set current timer to next index duration
                               )
                               startTime = System.currentTimeMillis()
-
-
                           } else {
-                              //Timer Completed
-                              updateTimerState(
-                                  isTimerRunning = false,
-                                  showAlert = true
-                              )
+                              _isTimerRunning.value =false
+
+
+                              updateTimerState(   showAlert = true   )
 
                           }
 
@@ -171,22 +195,20 @@ import kotlinx.coroutines.launch
 
                   }
               } catch (e: IndexOutOfBoundsException) {
-
+                  // Handle out-of-bounds exception more gracefully
                   Log.e("TimerViewModel", "Index out of bounds: ${e.message}")
-                  updateTimerState(isTimerRunning = false, showAlert = true)
-
-              } finally {
-                  Log.d("TBViewMode", "Timer Job Finished (Normally or Cancelled)")
+                  _isTimerRunning.value =false
+                      updateTimerState(  showAlert = true)
 
               }
           }
 
       }
 
-        fun updateTimerState(
-          index: Int = _timerState.value.index,
+      private  fun updateTimerState(
+
           currentTime: Long = _timerState.value.currentTime,
-          isTimerRunning: Boolean = _timerState.value.isTimerRunning,
+
           showAlert: Boolean = _timerState.value.showAlert,
           outerProgress: Float = _timerState.value.outerProgress,
           innerProgress: Float = _timerState.value.innerProgress,
@@ -194,15 +216,91 @@ import kotlinx.coroutines.launch
       ) {
           viewModelScope.launch(Dispatchers.Main.immediate) {  // Ensure UI updates on Main
               _timerState.value = _timerState.value.copy(
-                  index = index,
+
                   currentTime = currentTime,
-                  isTimerRunning = isTimerRunning,
+
                   showAlert = showAlert,
                   outerProgress = outerProgress,
                   innerProgress = innerProgress,
                   isGoingForward = isGoingForward
               )
           }
+      }
+
+
+
+
+      fun pauseTimer() = viewModelScope.launch(Dispatchers.IO) {
+
+          _pausedTime.value = System.currentTimeMillis() - startTime // Calculate elapsedTime
+
+          _isTimerRunning.value =  false
+          job?.cancel()
+
+          soundPlayed = false // Reset soundPlayed on pause
+          Log.d("TBViewMode", "isPause")
+
+      }
+
+
+
+      fun nextInterval() = viewModelScope.launch(Dispatchers.IO) {
+
+
+
+          if (_index.value < _workoutDetail.value.size - 1) {
+
+              job?.cancel()
+              soundPlayed = false
+
+              _index.value += 1
+                updateTimerState(
+
+                  currentTime = _workoutDetail.value[_index.value].intervalDuration  ,
+                  isGoingForward = true
+              )
+              startTimer()
+          }
+          Log.d("TBViewMode", "Next Interval")
+
+      }
+
+
+      fun previousInterval() = viewModelScope.launch(Dispatchers.IO) {
+
+
+          if (_index.value > 0) {
+
+              job?.cancel()
+              soundPlayed = false
+
+
+              _index.value -= 1
+
+              updateTimerState(
+
+                  currentTime = _workoutDetail.value[_index.value ].intervalDuration,  // Set remaining time
+                  isGoingForward = false
+              )
+              startTimer()
+          }
+          Log.d("TBViewMode", "Previous Interval ")
+
+      }
+
+
+
+      fun resetTimer() = viewModelScope.launch(Dispatchers.IO) {
+
+          _index.value=0
+          updateTimerState(   showAlert = false   )
+          soundPool.release() // Release SoundPool resources
+          job?.cancel()
+
+          soundPlayed = false
+           // Reset to default values
+
+          Log.d("TBViewMode", "reset Viewmodel")
       }
 
 
@@ -224,65 +322,15 @@ import kotlinx.coroutines.launch
           }
       }
 
-      fun pauseTimer() = viewModelScope.launch(Dispatchers.IO) {
 
-          updateTimerState(isTimerRunning = false)
-          job?.cancel()
-          Log.d("TBViewMode", "isPause")
-
-      }
-
-      fun resetTimer() = viewModelScope.launch(Dispatchers.IO) {
-          job?.cancel()
-          soundPlayed = false
-          _timerState.value =TimerStateData()  // Reset to default values
-
-          Log.d("TBViewMode", "reset Viewmodel")
-      }
-
-
-      fun nextInterval() = viewModelScope.launch(Dispatchers.IO) {
-
-          val currentIndex = _timerState.value.index
-
-          if (currentIndex < _workoutDetail.value.size - 1) {
-
-              job?.cancel()
-              soundPlayed = false
-
-              updateTimerState(
-                  index = currentIndex + 1,
-                  isGoingForward = true
-              )
-              startTimer()
-          }
-          Log.d("TBViewMode", "Next Interval")
-
-      }
-
-
-      fun previousInterval() = viewModelScope.launch(Dispatchers.IO) {
-          val currentIndex = _timerState.value.index
-
-          if (currentIndex > 0) {
-
-              job?.cancel()
-              soundPlayed = false
-
-              updateTimerState(
-                  index = currentIndex - 1,
-                  isGoingForward = false
-              )
-              startTimer()
-          }
-          Log.d("TBViewMode", "Previous Interval ")
-
-      }
 
       override fun onCleared() {
           super.onCleared()
+          _index.value=0
+          updateTimerState(   showAlert = false   )
           soundPool.release() // Release SoundPool resources
-          job?.cancel()   //Ensure Timer is stopped.
+          job?.cancel()
+      //Ensure Timer is stopped.
       }
 
 
