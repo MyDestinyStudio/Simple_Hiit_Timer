@@ -6,7 +6,9 @@ Create custom HIIT (High-Intensity Interval Training) workouts with this modern,
 customize each with specific durations and names , and track your progress with a built-in timer that guides you through your personalized workout. 
 Build your perfect routine and achieve your fitness goals!
 
+Note: this is a lighter version of the my actual App
+
 <img src="Images/412567608-d84609d9-e797-4054-84c6-c8a96513983f.png" width="300" heigth="900"> <img src="Images/412568081-de262a81-f8de-45ce-911e-b69581681d76.png" width="300" heigth="900">
-
-
  
+https://github.com/user-attachments/assets/f1e5582b-bbec-42be-97e7-4c8a6a2c6680
+
